@@ -18,6 +18,14 @@
 <link rel="apple-touch-icon" href="cover.jpg">
 <link rel="icon" href="icon.png">
 <style>
+  /* 花体标题字体：Great Vibes（SIL OFL 授权），已子集化到 "Merry Christmas" 所需字符 */
+  @font-face{
+    font-family:'GreatVibes';
+    font-style:normal;
+    font-weight:400;
+    font-display:block;
+    src:url(data:font/woff2;base64,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) format('woff2');
+  }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{
     width:100%;height:100%;overflow:hidden;background:#000;
@@ -423,7 +431,7 @@
 
   // ---------- 标题文字（预渲染成一张图层，避免每帧走 shadowBlur） ----------
   var TITLE = 'Merry Christmas';
-  var TITLE_FONT = '"Monotype Corsiva","Segoe Script","Brush Script MT","Lucida Handwriting",cursive,"PingFang SC","Microsoft YaHei",sans-serif';
+  var TITLE_FONT = '"GreatVibes","Monotype Corsiva","Segoe Script","Brush Script MT",cursive,sans-serif';
   var overlay = null, overlayY = 0;
 
   function buildOverlay() {
@@ -609,16 +617,25 @@
     }
   }
 
+  function ensureAudioCtx() {
+    if (ac) return true;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    try {
+      ac = new AC();
+      synthMaster = ac.createGain();
+      synthMaster.gain.value = 0.42;
+      synthMaster.connect(ac.destination);
+      if (ac.state === 'suspended') ac.resume();
+      return true;
+    } catch (e) { ac = null; return false; }
+  }
+
   function startSynth() {
     if (synthOn) return;
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    if (!ensureAudioCtx()) return;
     try { bgm.pause(); } catch (e) {}
-    ac = new AC();
     if (ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
-    synthMaster = ac.createGain();
-    synthMaster.gain.value = 0.42;
-    synthMaster.connect(ac.destination);
     synthOn = true;
     noteIdx = 0;
     nextNoteTime = ac.currentTime + 0.15;
@@ -632,6 +649,8 @@
     started = true;
     muteBtn.classList.add('playing');
     hideHint();
+    // 必须在手势回调里同步建好 AudioContext，否则之后创建的会被判定为自动播放而静音
+    ensureAudioCtx();
     bgm.volume = 0.52;
     var p = null;
     try { p = bgm.play(); } catch (e) { p = null; }
@@ -642,11 +661,11 @@
         if (!synthOn) startSynth();
       });
     }
-    // 文件不存在或迟迟不播，2 秒后改用合成，保证一定有声音
+    // 只在「确定加载不到」时才切合成，绝不打断正在缓冲的原曲
     setTimeout(function () {
       if (synthOn) return;
-      if (bgm.readyState < 3 || bgm.paused) startSynth();
-    }, 2000);
+      if (bgm.error || bgm.networkState === 3) startSynth();
+    }, 6000);
   }
 
   function firstGesture(e) {
@@ -797,6 +816,16 @@
   flakeSprite = makeFlakeSprite();
   layout();
   requestAnimationFrame(frame);
+
+  // 内嵌字体是异步解码的，加载完成后重画标题层，避免用回退字体画死
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('40px GreatVibes').then(function () {
+      buildOverlay();
+    }).catch(function () {});
+    if (document.fonts.ready) {
+      document.fonts.ready.then(function () { buildOverlay(); }).catch(function () {});
+    }
+  }
 
   var resizeTimer = null;
   function onResize() {
