@@ -250,10 +250,16 @@
     var cssW = window.innerWidth;
     var cssH = window.innerHeight;
 
-    // 内部分辨率：长边受限。桌面按原版 1600×900 渲染，手机略降以保帧率。
-    var cap = isMobile ? 1000 : 1600;
+    // 内部分辨率：直接按接近物理像素渲染。
+    // 降级时只缩分辨率，粒子数不变（粒子是廉价的，putImageData 才是瓶颈），
+    // 这样降级后画面只是变柔，不会突然变稀。
+    var baseCap = isMobile ? 1600 : 2100;
+    var cap = qualityStep === 0 ? baseCap
+            : (qualityStep === 1 ? baseCap * 0.78 : baseCap * 0.60);
     var longSide = Math.max(cssW, cssH);
-    var q = Math.min(1, cap / longSide);
+    // 按设备像素比超采样，但不超出 cap（避免低端机被 putImageData 拖死）
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    var q = Math.min(dpr, cap / longSide);
 
     W = Math.max(160, Math.round(cssW * q));
     H = Math.max(160, Math.round(cssH * q));
@@ -265,6 +271,7 @@
 
     img = ctx.createImageData(W, H);
     buf = img.data;
+    buildBrush(W / cssW);
 
     portrait = H > W * 1.12;
 
@@ -276,16 +283,53 @@
     // 竖屏整体上移一点，给底部标题留呼吸空间
     offsetY = portrait ? -H * 0.055 : 0;
 
-    // 粒子数随像素规模自适应
-    var px = W * H;
-    var base = Math.round(px * 0.055);
-    var mult = qualityStep === 0 ? 1 : (qualityStep === 1 ? 0.68 : 0.45);
-    totalParticles = Math.max(6000, Math.min(50000, Math.round(base * mult)));
+    // 粒子数按「CSS 面积」算，不按设备像素——否则提高分辨率等于凭空多画几倍粒子，
+    // 视觉密度没变化却把帧率拖死。密度和笔刷半径挂钩：笔刷变小就用更多粒子补回来
+    // （多而小的点总写像素数反而比少而大的点更省）。
+    var cssArea = cssW * cssH;
+    var base = Math.round(cssArea * 0.086);
+    totalParticles = Math.max(6000, Math.min(80000, base));
     scene = buildScene(totalParticles);
 
     initFlakes();
     initHearts();
     buildOverlay();
+  }
+
+  // ---------- 笔刷 ----------
+  // 原版是 3px 柔光点。分辨率提高后不能简单把九点采样点拉开——
+  // 采样点之间会漏出空隙，粒子会变成"虚线十字"的颗粒噪点。
+  // 所以按当前缩放倍数生成一张实心圆形笔刷（半径随 q 增长，权重高斯衰减），
+  // 让粒子在任何分辨率下都是"同一颗柔光圆点"。
+  var brushOff = null;   // Int32Array：相对首字节的偏移
+  var brushA   = null;   // Int32Array：0..256 的强度
+  var brushR   = 1;      // 半径（设备像素）
+
+  function buildBrush(q) {
+    var r = Math.round(q * 1.5 - 0.5);
+    if (r < 1) r = 1; else if (r > 4) r = 4;
+    brushR = r;
+
+    var off = [], w = [], inv = 1 / r;
+    for (var dy = -r; dy <= r; dy++) {
+      for (var dx = -r; dx <= r; dx++) {
+        var d2 = dx * dx + dy * dy;
+        if (d2 > r * r + r) continue;            // 圆形裁切
+        var t = Math.sqrt(d2) * inv;
+        // 实心核（t<0.35 满强度）+ 余弦软边 → 是"一颗柔光点"，不是一颗噪点
+        var a;
+        if (t <= 0.35) a = 1;
+        else if (t >= 1) a = 0;
+        else { var u = (t - 0.35) / 0.65; a = 1 - u * u * (3 - 2 * u); }
+        if (a < 0.05) continue;
+        // dy*W*4 + dx*4 —— W 在 layout 里已更新
+        off.push(((dy * W + dx) << 2));
+        var wv = (a * 256) | 0;
+        w.push(wv > 256 ? 256 : wv);
+      }
+    }
+    brushOff = new Int32Array(off);
+    brushA   = new Int32Array(w);
   }
 
   // ---------- 前景 2D 大雪花 ----------
@@ -354,15 +398,17 @@
   var rnd3 = mulberry32(424242);
 
   function makeHeartSprite(color) {
-    var S = 72;
+    // 精灵按高分辨率制备：手机上心最大要画到 ~100 设备像素，
+    // 72px 的图会被放大，边缘出现锯齿和竖直接缝。
+    var S = 128;
     var c = document.createElement('canvas');
     c.width = c.height = S;
     var g = c.getContext('2d');
     g.translate(S / 2, S / 2);
     g.scale(S / 48, -S / 48);
     g.beginPath();
-    for (var i = 0; i <= 30; i++) {
-      var a = i / 30 * TAU;
+    for (var i = 0; i <= 64; i++) {
+      var a = i / 64 * TAU;
       var px = 16 * Math.pow(Math.sin(a), 3);
       var py = 13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a);
       if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
@@ -370,7 +416,7 @@
     g.closePath();
     // 自带外发光 + 实心，保证叠加到黑底上是「发光」而不是「灰斑」
     g.shadowColor = color;
-    g.shadowBlur = 9;
+    g.shadowBlur = 16;
     g.fillStyle = color;
     g.fill();
     g.fill();
@@ -734,6 +780,12 @@
     var S = scaleRef;
     var Wm = W - 1, Hm = H - 1;
 
+    // 高分辨率下笔刷半径随缩放倍数增长，粒子的视觉大小保持不变
+    var R = brushR;
+    var edgeX = R + 1, edgeY = R + 1;
+    var limX = Wm - R, limY = Hm - R;
+    var bOff = brushOff, bA = brushA, bN = bA.length;
+
     for (var i = 0; i < n; i += 6) {
       var x = scene[i], y = scene[i + 1], z = scene[i + 2];
 
@@ -748,7 +800,7 @@
       var sx = halfW + xz * f;
       var sy = halfH - yp * f + offsetY;
 
-      if (sx < 2 || sx >= Wm - 1 || sy < 2 || sy >= Hm - 1) continue;
+      if (sx < edgeX || sx >= limX || sy < edgeY || sy >= limY) continue;
 
       // 近亮远暗（原版无衰减，这里保留极轻微的层次）
       var k = 1.05 - zp * 0.008;
@@ -762,37 +814,16 @@
       var ix = sx | 0, iy = sy | 0;
       var p = (iy * W + ix) << 2;
 
-      // 主像素用「取最大」混合 —— 等价于原版的覆盖绘制，不会因叠加而泛白
-      if (cr > buf[p]) buf[p] = cr;
-      if (cg > buf[p + 1]) buf[p + 1] = cg;
-      if (cb > buf[p + 2]) buf[p + 2] = cb;
-      buf[p + 3] = 255;
-
-      // 3×3 实心点（对应原版 radius 1~2 的实心圆）：中心满色，四邻 60%，对角 30%
-      var r1 = (cr * 0.60) | 0, g1 = (cg * 0.60) | 0, b1 = (cb * 0.60) | 0;
-      var r2 = (cr * 0.30) | 0, g2 = (cg * 0.30) | 0, b2 = (cb * 0.30) | 0;
-      var q, rowUp = p - (W << 2), rowDn = p + (W << 2);
-
-      q = p - 4;
-      if (r1 > buf[q]) { buf[q] = r1; buf[q + 1] = g1; buf[q + 2] = b1; buf[q + 3] = 255; }
-      q = p + 4;
-      if (r1 > buf[q]) { buf[q] = r1; buf[q + 1] = g1; buf[q + 2] = b1; buf[q + 3] = 255; }
-
-      if (rowUp > 0) {
-        q = rowUp - 4;
-        if (r2 > buf[q]) { buf[q] = r2; buf[q + 1] = g2; buf[q + 2] = b2; buf[q + 3] = 255; }
-        q = rowUp;
-        if (r1 > buf[q]) { buf[q] = r1; buf[q + 1] = g1; buf[q + 2] = b1; buf[q + 3] = 255; }
-        q = rowUp + 4;
-        if (r2 > buf[q]) { buf[q] = r2; buf[q + 1] = g2; buf[q + 2] = b2; buf[q + 3] = 255; }
-      }
-      if (rowDn < buf.length - 4) {
-        q = rowDn - 4;
-        if (r2 > buf[q]) { buf[q] = r2; buf[q + 1] = g2; buf[q + 2] = b2; buf[q + 3] = 255; }
-        q = rowDn;
-        if (r1 > buf[q]) { buf[q] = r1; buf[q + 1] = g1; buf[q + 2] = b1; buf[q + 3] = 255; }
-        q = rowDn + 4;
-        if (r2 > buf[q]) { buf[q] = r2; buf[q + 1] = g2; buf[q + 2] = b2; buf[q + 3] = 255; }
+      // 实心圆笔刷 + 「取最大」混合：等价于原版覆盖绘制，叠加不会泛白，
+      // 也用不着排序，远处的点不会盖掉近处的亮线。
+      for (var t = 0; t < bN; t++) {
+        var qp = p + bOff[t];
+        var k2 = bA[t];
+        var vr = (cr * k2) >> 8, vg = (cg * k2) >> 8, vb = (cb * k2) >> 8;
+        if (vr > buf[qp]) buf[qp] = vr;
+        if (vg > buf[qp + 1]) buf[qp + 1] = vg;
+        if (vb > buf[qp + 2]) buf[qp + 2] = vb;
+        buf[qp + 3] = 255;
       }
     }
 
@@ -801,12 +832,18 @@
     drawHearts(dt, now);
     if (overlay) ctx.drawImage(overlay, 0, overlayY);
 
-    // ---- 自适应降级 ----
-    if (qualityStep < 2 && !dragging) {
+    // ---- 自适应降级：先按高清起步，跑不动再逐级退，40 帧内就给结论 ----
+    if (qualityStep < 2 && !dragging && !document.hidden) {
+      // 切后台 / 卡顿尖峰会让单帧异常长，直接丢弃这一轮采样，别误判成低性能
+      if (dt > 0.2) { fpsAcc = 0; fpsFrames = 0; }
       fpsAcc += dt; fpsFrames++;
-      if (fpsFrames >= 90) {
+      if (fpsFrames >= 40) {
         var fps = fpsFrames / fpsAcc;
-        if (fps < 42) { qualityStep++; layout(); }
+        var step = fps < 30 ? 2 : (fps < 48 ? 1 : 0);
+        if (step) {
+          qualityStep = Math.min(2, qualityStep + step);
+          layout();
+        }
         fpsAcc = 0; fpsFrames = 0;
       }
     }
