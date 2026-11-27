@@ -68,7 +68,7 @@
 </head>
 <body>
 <canvas id="scene"></canvas>
-<audio id="bgm" loop preload="none" src="./bgm.m4a?v=2"></audio>
+<audio id="bgm" loop preload="none" src="./bgm.m4a?v=3"></audio>
 <button id="mute-btn" aria-label="音乐开关">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor" stroke="none"/>
@@ -697,7 +697,7 @@
     hideHint();
     // 必须在手势回调里同步建好 AudioContext，否则之后创建的会被判定为自动播放而静音
     ensureAudioCtx();
-    bgm.volume = 0.52;
+    bgm.volume = 1.0;
     var p = null;
     try { p = bgm.play(); } catch (e) { p = null; }
     if (p && p.then) {
